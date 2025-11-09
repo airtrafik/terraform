@@ -146,7 +146,7 @@ env:
   SERVICE_NAME: api  # Must match Artifact Registry repository
 ```
 
-Available services (from `environments/shared/main.tf`):
+Available services (from `environments/ops/main.tf`):
 - `api`
 - `frontend`
 - `worker`
@@ -155,7 +155,7 @@ Available services (from `environments/shared/main.tf`):
 
 If you're creating a new service not in the list:
 
-1. Update `environments/shared/main.tf`:
+1. Update `environments/ops/main.tf`:
    ```hcl
    repositories = {
      api = { ... }
@@ -169,7 +169,7 @@ If you're creating a new service not in the list:
 
 2. Apply changes:
    ```bash
-   cd environments/shared
+   cd environments/ops
    terraform apply
    ```
 

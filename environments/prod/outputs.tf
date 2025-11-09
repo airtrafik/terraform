@@ -42,22 +42,22 @@ output "valkey_port" {
 
 output "artifact_registry_base_url" {
   description = "Artifact Registry base URL (shared across environments)"
-  value       = try(data.terraform_remote_state.shared.outputs.registry_base_url, "")
+  value       = try(data.terraform_remote_state.ops.outputs.registry_base_url, "")
 }
 
 output "api_repository_url" {
   description = "API service Docker repository URL"
-  value       = try(data.terraform_remote_state.shared.outputs.api_repository_url, "")
+  value       = try(data.terraform_remote_state.ops.outputs.api_repository_url, "")
 }
 
 output "frontend_repository_url" {
   description = "Frontend Docker repository URL"
-  value       = try(data.terraform_remote_state.shared.outputs.frontend_repository_url, "")
+  value       = try(data.terraform_remote_state.ops.outputs.frontend_repository_url, "")
 }
 
 output "worker_repository_url" {
   description = "Worker Docker repository URL"
-  value       = try(data.terraform_remote_state.shared.outputs.worker_repository_url, "")
+  value       = try(data.terraform_remote_state.ops.outputs.worker_repository_url, "")
 }
 
 output "uploads_bucket_name" {

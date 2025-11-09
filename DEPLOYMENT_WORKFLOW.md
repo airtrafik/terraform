@@ -59,7 +59,7 @@ terraform init && terraform apply
 
 ### 2. Update Shared Configuration with Service Accounts
 
-After deploying all three environments, update `environments/shared/terraform.tfvars` with the service account emails:
+After deploying all three environments, update `environments/ops/terraform.tfvars` with the service account emails:
 
 ```hcl
 # Update these with actual values from step 1
@@ -77,7 +77,7 @@ prod_ci_service_account    = "ci-cd@airtrafik-prod.iam.gserviceaccount.com"
 Now deploy the shared registries with cross-project IAM:
 
 ```bash
-cd environments/shared
+cd environments/ops
 terraform init
 terraform plan
 terraform apply
@@ -169,7 +169,7 @@ kubectl --context=prod set image deployment/api \
 
 To add a new service (e.g., `scheduler`):
 
-1. Edit `environments/shared/main.tf`
+1. Edit `environments/ops/main.tf`
 2. Add to the `repositories` map:
 
 ```hcl
@@ -186,7 +186,7 @@ repositories = {
 }
 ```
 
-3. Update outputs in `environments/shared/outputs.tf`:
+3. Update outputs in `environments/ops/outputs.tf`:
 
 ```hcl
 output "scheduler_repository_url" {
@@ -198,7 +198,7 @@ output "scheduler_repository_url" {
 4. Apply the changes:
 
 ```bash
-cd environments/shared
+cd environments/ops
 terraform plan
 terraform apply
 ```
@@ -301,10 +301,10 @@ gcloud artifacts repositories get-iam-policy airtrafik-api \
 
 ### Registry Not Found
 
-Ensure shared environment is deployed:
+Ensure ops environment is deployed:
 
 ```bash
-cd environments/shared
+cd environments/ops
 terraform output
 ```
 
