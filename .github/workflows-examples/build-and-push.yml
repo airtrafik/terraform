@@ -28,7 +28,7 @@ env:
   # Update these for your service
   SERVICE_NAME: api  # Change to: api, frontend, worker, etc.
   REGISTRY_REGION: us-west1
-  REGISTRY_PROJECT: airtrafik-prod
+  REGISTRY_PROJECT: airtrafik-ops  # Shared ops project for artifact registries
 
 jobs:
   build-and-push:

@@ -46,8 +46,12 @@ See [DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md) for detailed deployment i
 ## Prerequisites
 
 1. **GCP Project Setup**
-   - Create GCP projects: `airtrafik-dev`, `airtrafik-staging`, `airtrafik-prod`
-   - Enable required APIs:
+   - Create GCP projects:
+     - `airtrafik-dev` - Development environment
+     - `airtrafik-staging` - Staging environment
+     - `airtrafik-prod` - Production environment
+     - `airtrafik-ops` - Operational infrastructure (Terraform state, artifact registries, telemetry)
+   - Enable required APIs in all projects:
      ```bash
      gcloud services enable compute.googleapis.com
      gcloud services enable container.googleapis.com
@@ -66,8 +70,11 @@ See [DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md) for detailed deployment i
      ```
 
 3. **Create State Bucket** (first time only)
+
+   The Terraform state bucket is hosted in the `airtrafik-ops` project for centralized state management:
+
    ```bash
-   gsutil mb -p airtrafik-dev gs://airtrafik-terraform-state
+   gsutil mb -p airtrafik-ops gs://airtrafik-terraform-state
    gsutil versioning set on gs://airtrafik-terraform-state
    ```
 
@@ -158,10 +165,10 @@ The Terraform configurations output values needed for Helm deployments:
 
 ### Shared Registry URLs
 
-All environments use the same registries (hosted in production project):
-- API: `us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api`
-- Frontend: `us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-frontend`
-- Worker: `us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-worker`
+All environments use the same registries (hosted in ops project):
+- API: `us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api`
+- Frontend: `us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-frontend`
+- Worker: `us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-worker`
 
 ## Security Considerations
 

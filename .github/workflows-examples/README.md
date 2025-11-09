@@ -123,7 +123,7 @@ The workflows use the following tagging strategy:
 
 All services push to shared registries:
 ```
-us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-{service}
+us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-{service}
 ```
 
 Where `{service}` is: `api`, `frontend`, `worker`, etc.
@@ -215,7 +215,7 @@ kubectl rollout undo deployment/<service-name> -n <namespace>
 - Ensure service account key hasn't expired
 
 ### Image Push Failures
-- Verify registry project ID is correct (`airtrafik-prod`)
+- Verify registry project ID is correct (`airtrafik-ops`)
 - Check service name matches registry name
 - Ensure `gcloud auth configure-docker` was called
 

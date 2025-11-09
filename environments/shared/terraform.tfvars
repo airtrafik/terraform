@@ -1,6 +1,7 @@
-# Shared infrastructure hosted in production project
-# (Alternative: Create a separate airtrafik-shared project)
-project_id = "airtrafik-prod"
+# Shared infrastructure hosted in ops project
+# airtrafik-ops is used for operational items like consolidated telemetry,
+# deployment infrastructure, and shared artifact registries
+project_id = "airtrafik-ops"
 
 # These service account emails will be provided by the environment-specific deployments
 # Update these after deploying dev/staging/prod environments

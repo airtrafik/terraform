@@ -41,7 +41,7 @@ GCP Resources (Artifact Registry, GKE)
 
 ```bash
 # Set variables
-export PROJECT_ID="airtrafik-prod"  # Change to your project
+export PROJECT_ID="airtrafik-ops"  # Ops project hosts shared CI/CD infrastructure
 export POOL_NAME="github-actions-pool"
 export PROVIDER_NAME="github-provider"
 export REPO="your-org/your-repo"  # e.g., "airtrafik/api-service"
@@ -295,8 +295,8 @@ jobs:
       - name: Test GCP Access
         run: |
           gcloud config list
-          gcloud projects describe airtrafik-prod
-          gcloud artifacts repositories list --project=airtrafik-prod --location=us-west1
+          gcloud projects describe airtrafik-ops
+          gcloud artifacts repositories list --project=airtrafik-ops --location=us-west1
 ```
 
 Run the workflow manually and verify it completes successfully.

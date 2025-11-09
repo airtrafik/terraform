@@ -27,7 +27,7 @@ on:
 env:
   SERVICE_NAME: api  # Update for your service
   REGISTRY_REGION: us-west1
-  REGISTRY_PROJECT: airtrafik-prod
+  REGISTRY_PROJECT: airtrafik-ops  # Shared ops project for artifact registries
 
 jobs:
   test:

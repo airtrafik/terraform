@@ -15,7 +15,7 @@ GitHub Actions Workflow
     ↓
 Build Docker Image
     ↓
-Push to Shared Registry (airtrafik-prod)
+Push to Shared Registry (airtrafik-ops)
     ├─ airtrafik-api
     ├─ airtrafik-frontend
     └─ airtrafik-worker
@@ -296,8 +296,8 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - run: |
           gcloud auth configure-docker us-west1-docker.pkg.dev
-          docker build -t us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-${{ env.SERVICE_NAME }}:$(git rev-parse --short HEAD) .
-          docker push us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-${{ env.SERVICE_NAME }}:$(git rev-parse --short HEAD)
+          docker build -t us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-${{ env.SERVICE_NAME }}:$(git rev-parse --short HEAD) .
+          docker push us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-${{ env.SERVICE_NAME }}:$(git rev-parse --short HEAD)
 ```
 
 ### Full CI/CD Pipeline
@@ -361,7 +361,7 @@ gcloud container clusters get-credentials airtrafik-gke-dev \
 
 # Deploy image
 kubectl set image deployment/api \
-  api=us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:abc123 \
+  api=us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:abc123 \
   -n default
 
 # Watch rollout
@@ -433,7 +433,7 @@ gcloud projects get-iam-policy airtrafik-prod \
 ```bash
 # Grant access
 gcloud artifacts repositories add-iam-policy-binding airtrafik-api \
-  --project=airtrafik-prod \
+  --project=airtrafik-ops \
   --location=us-west1 \
   --member="serviceAccount:<sa-email>" \
   --role="roles/artifactregistry.writer"
@@ -446,7 +446,7 @@ gcloud artifacts repositories add-iam-policy-binding airtrafik-api \
 **Fix:** Create the deployment first:
 ```bash
 kubectl create deployment api \
-  --image=us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:latest \
+  --image=us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:latest \
   -n default
 ```
 
@@ -611,7 +611,7 @@ terraform output api_repository_url
 
 # Test docker push
 gcloud auth configure-docker us-west1-docker.pkg.dev
-docker push us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:test
+docker push us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:test
 
 # Test kubectl access
 kubectl get deployments -n default

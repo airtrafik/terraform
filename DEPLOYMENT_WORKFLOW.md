@@ -19,7 +19,7 @@ The artifact registry has been refactored to follow best practices:
 ### Repository Structure
 
 ```
-us-west1-docker.pkg.dev/airtrafik-prod/
+us-west1-docker.pkg.dev/airtrafik-ops/
 ├── airtrafik-api/        # API service images
 ├── airtrafik-frontend/   # Frontend images
 └── airtrafik-worker/     # Worker images
@@ -95,7 +95,7 @@ Check that registries were created:
 
 ```bash
 gcloud artifacts repositories list \
-  --project=airtrafik-prod \
+  --project=airtrafik-ops \
   --location=us-west1
 ```
 
@@ -103,7 +103,7 @@ Verify IAM permissions:
 
 ```bash
 gcloud artifacts repositories get-iam-policy airtrafik-api \
-  --project=airtrafik-prod \
+  --project=airtrafik-ops \
   --location=us-west1
 ```
 
@@ -117,7 +117,7 @@ Your CI pipeline should build images **once** and tag appropriately:
 
 ```bash
 # Example: Building API service
-IMAGE_NAME="us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api"
+IMAGE_NAME="us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api"
 GIT_SHA=$(git rev-parse --short HEAD)
 
 # Build and push with SHA tag
@@ -136,25 +136,25 @@ Use the **same SHA** across environments:
 ```bash
 # Dev deployment (already has :dev-latest from build)
 kubectl set image deployment/api \
-  api=us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:abc123
+  api=us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:abc123
 
 # After testing in dev, promote to staging (same image!)
-docker tag us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:abc123 \
-           us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:staging-latest
-docker push us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:staging-latest
+docker tag us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:abc123 \
+           us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:staging-latest
+docker push us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:staging-latest
 
 # Deploy to staging
 kubectl --context=staging set image deployment/api \
-  api=us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:abc123
+  api=us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:abc123
 
 # After validation, promote to prod
-docker tag us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:abc123 \
-           us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:v1.2.3
-docker push us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:v1.2.3
+docker tag us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:abc123 \
+           us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:v1.2.3
+docker push us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:v1.2.3
 
 # Deploy to prod
 kubectl --context=prod set image deployment/api \
-  api=us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:v1.2.3
+  api=us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:v1.2.3
 ```
 
 ### Recommended Tagging Strategy
@@ -236,7 +236,7 @@ Configured in `modules/artifact-registry/main.tf`:
 
 ### Cross-Project Permissions
 
-The shared registries in `airtrafik-prod` grant:
+The shared registries in `airtrafik-ops` grant:
 
 - **Reader access** to GKE service accounts from all environments (for pulling images)
 - **Writer access** to CI service accounts from all environments (for pushing images)
@@ -257,7 +257,7 @@ spec:
       serviceAccountName: api-service-account  # Mapped to GKE SA via Workload Identity
       containers:
       - name: api
-        image: us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api:v1.2.3
+        image: us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api:v1.2.3
 ```
 
 The GKE service account automatically has permission to pull from shared registries.
@@ -282,7 +282,7 @@ Check IAM permissions:
 
 ```bash
 gcloud artifacts repositories get-iam-policy airtrafik-api \
-  --project=airtrafik-prod \
+  --project=airtrafik-ops \
   --location=us-west1
 ```
 
@@ -294,7 +294,7 @@ Check CI service account has write permissions:
 
 ```bash
 gcloud artifacts repositories get-iam-policy airtrafik-api \
-  --project=airtrafik-prod \
+  --project=airtrafik-ops \
   --location=us-west1 \
   | grep "roles/artifactregistry.writer"
 ```
@@ -323,6 +323,6 @@ Since nothing has been deployed yet, there's no migration needed! You're startin
 ✅ **Best practices** - Industry-standard CI/CD workflow
 
 Repository URLs:
-- API: `us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api`
-- Frontend: `us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-frontend`
-- Worker: `us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-worker`
+- API: `us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api`
+- Frontend: `us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-frontend`
+- Worker: `us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-worker`
