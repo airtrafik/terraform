@@ -97,13 +97,13 @@ module "memorystore" {
   prevent_destroy = true
 }
 
-# Artifact registries are managed centrally in environments/shared
+# Artifact registries are managed centrally in environments/ops
 # They are shared across all environments to enable build-once, deploy-many workflow
-data "terraform_remote_state" "shared" {
+data "terraform_remote_state" "ops" {
   backend = "gcs"
   config = {
     bucket = "airtrafik-terraform-state"
-    prefix = "shared"
+    prefix = "ops"
   }
 }
 

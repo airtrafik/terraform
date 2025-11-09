@@ -25,7 +25,7 @@ terraform/
 │   ├── gcs/          # Storage buckets
 │   └── iam/          # Service accounts
 ├── environments/      # Environment-specific configurations
-│   ├── shared/       # Shared resources (artifact registries)
+│   ├── ops/          # Operational infrastructure (artifact registries)
 │   ├── dev/          # Development environment
 │   ├── staging/      # Staging environment
 │   └── prod/         # Production environment
@@ -85,8 +85,8 @@ See [DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md) for detailed deployment i
 ### Quick Start
 
 1. **Deploy all environments** (dev, staging, prod) to create service accounts
-2. **Update shared configuration** with service account emails
-3. **Deploy shared registries** with cross-project IAM
+2. **Update ops configuration** with service account emails
+3. **Deploy ops infrastructure** (artifact registries) with cross-project IAM
 4. **Verify** registry access from all environments
 
 ### Detailed Steps
