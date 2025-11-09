@@ -4,42 +4,29 @@ variable "project_name" {
   default     = "airtrafik"
 }
 
-variable "environment" {
-  description = "Environment (dev, staging, prod)"
-  type        = string
-}
-
 variable "region" {
   description = "GCP region"
   type        = string
   default     = "us-west1"
 }
 
-variable "untagged_retention_days" {
-  description = "Number of days to retain untagged images"
-  type        = number
-  default     = 7
+variable "repositories" {
+  description = "Map of repository configurations for different services"
+  type = map(object({
+    description             = string
+    untagged_retention_days = optional(number, 14)
+    dev_retention_days      = optional(number, 60)
+    immutable_tags          = optional(bool, true)
+  }))
 }
 
-variable "dev_retention_days" {
-  description = "Number of days to retain dev/test tagged images"
-  type        = number
-  default     = 30
+variable "gke_service_accounts" {
+  description = "List of GKE service account emails (from all environments) for pulling images"
+  type        = list(string)
 }
 
-variable "immutable_tags" {
-  description = "Make tags immutable once created"
-  type        = bool
-  default     = false
-}
-
-variable "gke_service_account" {
-  description = "GKE service account email for pulling images"
-  type        = string
-}
-
-variable "ci_service_account" {
-  description = "CI service account email for pushing images"
-  type        = string
-  default     = ""
+variable "ci_service_accounts" {
+  description = "List of CI service account emails (from all environments) for pushing images"
+  type        = list(string)
+  default     = []
 }

@@ -21,21 +21,37 @@ terraform/
 │   ├── gke/          # Kubernetes cluster
 │   ├── cloudsql/     # PostgreSQL database
 │   ├── memorystore/  # Valkey cache
-│   ├── artifact-registry/  # Container registry
+│   ├── artifact-registry/  # Container registry (shared across environments)
 │   ├── gcs/          # Storage buckets
 │   └── iam/          # Service accounts
 ├── environments/      # Environment-specific configurations
+│   ├── shared/       # Shared resources (artifact registries)
 │   ├── dev/          # Development environment
 │   ├── staging/      # Staging environment
 │   └── prod/         # Production environment
 └── scripts/          # Helper scripts
 ```
 
+## Artifact Registry Architecture
+
+**Important**: Artifact registries are **shared across all environments** to follow the "build once, deploy many" best practice:
+
+- ✅ One repository per service (api, frontend, worker)
+- ✅ Same Docker image deployed to dev → staging → prod
+- ✅ No environment-specific image rebuilds
+- ✅ Easy to add new services
+
+See [DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md) for detailed deployment instructions.
+
 ## Prerequisites
 
 1. **GCP Project Setup**
-   - Create GCP projects: `airtrafik-dev`, `airtrafik-staging`, `airtrafik-prod`
-   - Enable required APIs:
+   - Create GCP projects:
+     - `airtrafik-dev` - Development environment
+     - `airtrafik-staging` - Staging environment
+     - `airtrafik-prod` - Production environment
+     - `airtrafik-ops` - Operational infrastructure (Terraform state, artifact registries, telemetry)
+   - Enable required APIs in all projects:
      ```bash
      gcloud services enable compute.googleapis.com
      gcloud services enable container.googleapis.com
@@ -54,16 +70,37 @@ terraform/
      ```
 
 3. **Create State Bucket** (first time only)
+
+   The Terraform state bucket is hosted in the `airtrafik-ops` project for centralized state management:
+
    ```bash
-   gsutil mb -p airtrafik-dev gs://airtrafik-terraform-state
+   gsutil mb -p airtrafik-ops gs://airtrafik-terraform-state
    gsutil versioning set on gs://airtrafik-terraform-state
    ```
 
 ## Deployment Instructions
 
-### 1. First-Time Setup
+**⚠️ IMPORTANT**: Follow the deployment order in [DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md)
 
-For the initial deployment, you need to create the state bucket:
+### Quick Start
+
+1. **Deploy all environments** (dev, staging, prod) to create service accounts
+2. **Update shared configuration** with service account emails
+3. **Deploy shared registries** with cross-project IAM
+4. **Verify** registry access from all environments
+
+### Detailed Steps
+
+See [DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md) for:
+- Complete deployment order
+- Service account configuration
+- CI/CD image workflow
+- Adding new services
+- Troubleshooting
+
+### First-Time Setup (State Bucket)
+
+Create the Terraform state bucket first:
 
 ```bash
 cd environments/dev
@@ -77,47 +114,6 @@ terraform apply
 ```
 
 After the state bucket is created, set `create_state_bucket = false` in terraform.tfvars.
-
-### 2. Deploy Development Environment
-
-```bash
-cd environments/dev
-
-# Initialize Terraform
-terraform init
-
-# Review planned changes
-terraform plan
-
-# Apply infrastructure
-terraform apply
-
-# Get outputs for Helm configuration
-terraform output -json > outputs.json
-```
-
-### 3. Deploy Staging Environment
-
-```bash
-cd environments/staging
-
-# Update terraform.tfvars with your project ID
-terraform init
-terraform plan
-terraform apply
-```
-
-### 4. Deploy Production Environment
-
-```bash
-cd environments/prod
-
-# Update terraform.tfvars with your project ID
-# Review all settings carefully
-terraform init
-terraform plan
-terraform apply
-```
 
 ## Environment Configurations
 
@@ -160,9 +156,19 @@ The Terraform configurations output values needed for Helm deployments:
 - `cloudsql_connection_name` - For Cloud SQL proxy
 - `cloudsql_private_ip` - Database private IP
 - `valkey_host` - Cache host address
-- `artifact_registry_url` - Docker registry URL
+- `artifact_registry_base_url` - Shared registry base URL
+- `api_repository_url` - API service Docker repository
+- `frontend_repository_url` - Frontend Docker repository
+- `worker_repository_url` - Worker Docker repository
 - `database_password_secret_id` - Secret Manager reference
 - Service account emails for Workload Identity
+
+### Shared Registry URLs
+
+All environments use the same registries (hosted in ops project):
+- API: `us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-api`
+- Frontend: `us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-frontend`
+- Worker: `us-west1-docker.pkg.dev/airtrafik-ops/airtrafik-worker`
 
 ## Security Considerations
 
@@ -242,15 +248,36 @@ gcloud compute project-info describe --project=<project-id>
 3. **Untagged image cleanup**: Configured in Artifact Registry
 4. **Lifecycle policies**: Automatic deletion of old backups/uploads
 
+## CI/CD with GitHub Actions
+
+This infrastructure is designed to work with **GitHub Actions** for building and deploying services.
+
+### Quick Start
+1. Copy workflow templates from `.github/workflows-examples/` to your service repository
+2. Set up authentication (see [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md))
+3. Update `SERVICE_NAME` in the workflow to match your service
+4. Push to trigger the workflow
+
+### Available Workflows
+- **build-and-push.yml** - Build and push Docker images to shared registries
+- **deploy-to-gke.yml** - Deploy to GKE environments
+- **full-cicd.yml** - Complete CI/CD pipeline with testing and deployment
+
+### Authentication Options
+- **Service Account Key** - Simple setup, less secure (good for testing)
+- **Workload Identity Federation** - Recommended for production (no long-lived keys)
+
+See [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md) for complete setup instructions.
+
 ## Next Steps
 
 After infrastructure is deployed:
 
-1. Install Helm charts for applications
-2. Configure ingress controllers
-3. Setup monitoring (Prometheus/Grafana)
-4. Configure CI/CD pipelines
-5. Setup DNS and SSL certificates
+1. **Set up CI/CD**: Configure GitHub Actions (see [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md))
+2. **Deploy applications**: Install Helm charts or use kubectl
+3. **Configure ingress**: Set up ingress controllers and load balancers
+4. **Setup monitoring**: Install Prometheus/Grafana or use Cloud Monitoring
+5. **Setup DNS and SSL**: Configure domains and certificates
 
 ## Support
 

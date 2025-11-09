@@ -26,9 +26,9 @@ if ! command -v terraform &> /dev/null; then
 fi
 
 # Get environment
-read -p "Enter environment (dev/staging/prod): " ENV
-if [[ ! "$ENV" =~ ^(dev|staging|prod)$ ]]; then
-    echo -e "${RED}Invalid environment. Must be dev, staging, or prod${NC}"
+read -p "Enter environment (dev/staging/prod/shared/ops): " ENV
+if [[ ! "$ENV" =~ ^(dev|staging|prod|shared|ops)$ ]]; then
+    echo -e "${RED}Invalid environment. Must be dev, staging, prod, shared, or ops${NC}"
     exit 1
 fi
 
@@ -89,16 +89,25 @@ for ROLE in "${ROLES[@]}"; do
         --quiet
 done
 
-# Create state bucket if it doesn't exist
+# Check state bucket (should be created in airtrafik-ops project)
 BUCKET_NAME="airtrafik-terraform-state"
 echo -e "\n${YELLOW}Checking state bucket...${NC}"
 if gsutil ls -b gs://$BUCKET_NAME &> /dev/null; then
-    echo "State bucket already exists"
+    echo -e "${GREEN}State bucket exists${NC}"
 else
-    echo "Creating state bucket..."
-    gsutil mb -p $PROJECT_ID gs://$BUCKET_NAME
-    gsutil versioning set on gs://$BUCKET_NAME
-    echo -e "${GREEN}State bucket created${NC}"
+    echo -e "${YELLOW}WARNING: State bucket does not exist${NC}"
+    echo "The state bucket should be created in the airtrafik-ops project:"
+    echo "  gsutil mb -p airtrafik-ops gs://$BUCKET_NAME"
+    echo "  gsutil versioning set on gs://$BUCKET_NAME"
+    if [[ "$ENV" == "ops" ]]; then
+        read -p "Create state bucket in this project? (y/n): " CREATE_BUCKET
+        if [[ "$CREATE_BUCKET" == "y" ]]; then
+            echo "Creating state bucket..."
+            gsutil mb -p $PROJECT_ID gs://$BUCKET_NAME
+            gsutil versioning set on gs://$BUCKET_NAME
+            echo -e "${GREEN}State bucket created${NC}"
+        fi
+    fi
 fi
 
 # Update terraform.tfvars

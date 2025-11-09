@@ -97,17 +97,14 @@ module "memorystore" {
   prevent_destroy = true
 }
 
-module "artifact_registry" {
-  source = "../../modules/artifact-registry"
-
-  project_name            = var.project_name
-  environment             = local.environment
-  region                  = var.region
-  gke_service_account     = module.iam.gke_workload_sa_email
-  ci_service_account      = module.iam.ci_cd_sa_email
-  untagged_retention_days = 14
-  dev_retention_days      = 60
-  immutable_tags          = true
+# Artifact registries are managed centrally in environments/shared
+# They are shared across all environments to enable build-once, deploy-many workflow
+data "terraform_remote_state" "shared" {
+  backend = "gcs"
+  config = {
+    bucket = "airtrafik-terraform-state"
+    prefix = "shared"
+  }
 }
 
 module "gcs" {

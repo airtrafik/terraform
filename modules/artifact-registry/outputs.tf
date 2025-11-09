@@ -1,16 +1,28 @@
-output "repository_id" {
-  description = "The repository ID"
-  value       = google_artifact_registry_repository.docker.repository_id
+output "registry_base_url" {
+  description = "Base URL for artifact registry in format: {region}-docker.pkg.dev/{project_id}"
+  value       = "${var.region}-docker.pkg.dev/${data.google_project.current.project_id}"
 }
 
-output "repository_name" {
-  description = "The repository name"
-  value       = google_artifact_registry_repository.docker.name
+output "repositories" {
+  description = "Map of repository names to their full URLs"
+  value = {
+    for name, repo in google_artifact_registry_repository.docker :
+    name => "${var.region}-docker.pkg.dev/${data.google_project.current.project_id}/${repo.repository_id}"
+  }
 }
 
-output "repository_url" {
-  description = "The repository URL for docker images"
-  value       = "${var.region}-docker.pkg.dev/${data.google_project.current.project_id}/${google_artifact_registry_repository.docker.repository_id}"
+output "repository_ids" {
+  description = "Map of service names to repository IDs"
+  value = {
+    for name, repo in google_artifact_registry_repository.docker :
+    name => repo.repository_id
+  }
 }
 
-data "google_project" "current" {}
+output "repository_names" {
+  description = "Map of service names to full repository resource names"
+  value = {
+    for name, repo in google_artifact_registry_repository.docker :
+    name => repo.name
+  }
+}

@@ -1,0 +1,149 @@
+# Example GitHub Actions workflow for building and pushing Docker images
+# Copy this file to your service repository at: .github/workflows/build-and-push.yml
+#
+# This workflow:
+# 1. Builds a Docker image
+# 2. Pushes to the shared Artifact Registry
+# 3. Tags appropriately based on branch/environment
+#
+# Required GitHub Secrets:
+#   GCP_SA_KEY: Base64-encoded service account key JSON
+#   OR use Workload Identity Federation (recommended, see docs)
+
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+env:
+  # Update these for your service
+  SERVICE_NAME: api  # Change to: api, frontend, worker, etc.
+  REGISTRY_REGION: us-west1
+  REGISTRY_PROJECT: airtrafik-ops  # Shared ops project for artifact registries
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write  # Required for Workload Identity Federation
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Option 1: Authenticate with Service Account Key (simpler but less secure)
+      - name: Authenticate to Google Cloud (Service Account Key)
+        if: ${{ env.USE_WORKLOAD_IDENTITY != 'true' }}
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # Option 2: Authenticate with Workload Identity Federation (recommended)
+      # Uncomment this and comment out Option 1 after setting up WIF
+      # - name: Authenticate to Google Cloud (Workload Identity)
+      #   if: ${{ env.USE_WORKLOAD_IDENTITY == 'true' }}
+      #   uses: google-github-actions/auth@v2
+      #   with:
+      #     workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+      #     service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY_REGION }}-docker.pkg.dev
+
+      - name: Generate image metadata
+        id: meta
+        run: |
+          # Determine image tags based on git ref
+          REGISTRY="${{ env.REGISTRY_REGION }}-docker.pkg.dev"
+          REPOSITORY="${{ env.REGISTRY_PROJECT }}/airtrafik-${{ env.SERVICE_NAME }}"
+          IMAGE_BASE="${REGISTRY}/${REPOSITORY}"
+
+          # Git commit SHA (always included)
+          GIT_SHA=$(git rev-parse --short HEAD)
+          TAGS="${IMAGE_BASE}:${GIT_SHA}"
+
+          # Add branch-based tags
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAGS="${TAGS},${IMAGE_BASE}:latest"
+            TAGS="${TAGS},${IMAGE_BASE}:dev-latest"
+            ENVIRONMENT="dev"
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            TAGS="${TAGS},${IMAGE_BASE}:develop"
+            ENVIRONMENT="dev"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            TAGS="${TAGS},${IMAGE_BASE}:${VERSION}"
+            TAGS="${TAGS},${IMAGE_BASE}:prod"
+            ENVIRONMENT="prod"
+          elif [[ "${{ github.ref }}" == refs/heads/feature/* ]]; then
+            BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//-/g')
+            TAGS="${TAGS},${IMAGE_BASE}:${BRANCH_NAME}"
+            ENVIRONMENT="dev"
+          fi
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "image_base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
+          echo "git_sha=${GIT_SHA}" >> $GITHUB_OUTPUT
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+
+          echo "Will build and push with tags:"
+          echo "${TAGS}" | tr ',' '\n'
+
+      - name: Build Docker image
+        run: |
+          # Build the image with all tags
+          IFS=',' read -ra TAG_ARRAY <<< "${{ steps.meta.outputs.tags }}"
+
+          BUILD_ARGS=""
+          for tag in "${TAG_ARRAY[@]}"; do
+            BUILD_ARGS="${BUILD_ARGS} -t ${tag}"
+          done
+
+          docker build ${BUILD_ARGS} \
+            --build-arg GIT_SHA=${{ steps.meta.outputs.git_sha }} \
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            --build-arg VERSION=${{ github.ref_name }} \
+            .
+
+      - name: Push Docker image to Artifact Registry
+        run: |
+          # Push all tags
+          IFS=',' read -ra TAG_ARRAY <<< "${{ steps.meta.outputs.tags }}"
+
+          for tag in "${TAG_ARRAY[@]}"; do
+            echo "Pushing ${tag}..."
+            docker push "${tag}"
+          done
+
+      - name: Output image information
+        run: |
+          echo "### Docker Image Published :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service:** ${{ env.SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Git SHA:** ${{ steps.meta.outputs.git_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ steps.meta.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Pull command:**" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ steps.meta.outputs.image_base }}:${{ steps.meta.outputs.git_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
