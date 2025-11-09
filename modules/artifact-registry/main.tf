@@ -1,58 +1,89 @@
+data "google_project" "current" {}
+
+# Create one repository per service (e.g., api, frontend, worker)
+# Repository naming: {project_name}-{service} (no environment suffix)
+# This allows the same image to be promoted through dev -> staging -> prod
 resource "google_artifact_registry_repository" "docker" {
+  for_each = var.repositories
+
   location      = var.region
-  repository_id = "${var.project_name}-images-${var.environment}"
-  description   = "Docker repository for ${var.project_name} ${var.environment} environment"
+  repository_id = "${var.project_name}-${each.key}"
+  description   = each.value.description
   format        = "DOCKER"
 
+  # Keep tagged releases indefinitely
   cleanup_policies {
     id     = "keep-tagged-release"
     action = "KEEP"
     condition {
       tag_state    = "TAGGED"
-      tag_prefixes = ["v", "release"]
+      tag_prefixes = ["v", "release", "prod"]
     }
   }
 
+  # Delete untagged images after retention period
   cleanup_policies {
     id     = "delete-untagged"
     action = "DELETE"
     condition {
-      tag_state = "UNTAGGED"
-      older_than = "${var.untagged_retention_days * 24 * 60 * 60}s"
+      tag_state  = "UNTAGGED"
+      older_than = "${each.value.untagged_retention_days * 24 * 60 * 60}s"
     }
   }
 
+  # Delete old dev/test tagged images
   cleanup_policies {
     id     = "delete-old-dev"
     action = "DELETE"
     condition {
       tag_state    = "TAGGED"
-      tag_prefixes = ["dev", "test"]
-      older_than   = "${var.dev_retention_days * 24 * 60 * 60}s"
+      tag_prefixes = ["dev", "test", "feature"]
+      older_than   = "${each.value.dev_retention_days * 24 * 60 * 60}s"
     }
   }
 
   docker_config {
-    immutable_tags = var.immutable_tags
+    immutable_tags = each.value.immutable_tags
   }
 
   labels = {
-    environment = var.environment
-    project     = var.project_name
+    service = each.key
+    project = var.project_name
   }
 }
 
+# Grant read access to ALL GKE service accounts from all environments
+# This allows any environment to pull from these shared registries
 resource "google_artifact_registry_repository_iam_member" "gke_pull" {
-  location   = google_artifact_registry_repository.docker.location
-  repository = google_artifact_registry_repository.docker.name
+  for_each = {
+    for pair in setproduct(keys(var.repositories), var.gke_service_accounts) :
+    "${pair[0]}-${element(split("@", pair[1]), 0)}" => {
+      repo = pair[0]
+      sa   = pair[1]
+    }
+    if pair[1] != ""
+  }
+
+  location   = var.region
+  repository = google_artifact_registry_repository.docker[each.value.repo].name
   role       = "roles/artifactregistry.reader"
-  member     = "serviceAccount:${var.gke_service_account}"
+  member     = "serviceAccount:${each.value.sa}"
 }
 
+# Grant write access to CI service accounts from all environments
+# This allows CI pipelines to push images to the shared registries
 resource "google_artifact_registry_repository_iam_member" "ci_push" {
-  count      = var.ci_service_account != "" ? 1 : 0
-  location   = google_artifact_registry_repository.docker.location
-  repository = google_artifact_registry_repository.docker.name
+  for_each = {
+    for pair in setproduct(keys(var.repositories), var.ci_service_accounts) :
+    "${pair[0]}-${element(split("@", pair[1]), 0)}" => {
+      repo = pair[0]
+      sa   = pair[1]
+    }
+    if pair[1] != ""
+  }
+
+  location   = var.region
+  repository = google_artifact_registry_repository.docker[each.value.repo].name
   role       = "roles/artifactregistry.writer"
-  member     = "serviceAccount:${var.ci_service_account}"
+  member     = "serviceAccount:${each.value.sa}"
 }

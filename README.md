@@ -21,15 +21,27 @@ terraform/
 │   ├── gke/          # Kubernetes cluster
 │   ├── cloudsql/     # PostgreSQL database
 │   ├── memorystore/  # Valkey cache
-│   ├── artifact-registry/  # Container registry
+│   ├── artifact-registry/  # Container registry (shared across environments)
 │   ├── gcs/          # Storage buckets
 │   └── iam/          # Service accounts
 ├── environments/      # Environment-specific configurations
+│   ├── shared/       # Shared resources (artifact registries)
 │   ├── dev/          # Development environment
 │   ├── staging/      # Staging environment
 │   └── prod/         # Production environment
 └── scripts/          # Helper scripts
 ```
+
+## Artifact Registry Architecture
+
+**Important**: Artifact registries are **shared across all environments** to follow the "build once, deploy many" best practice:
+
+- ✅ One repository per service (api, frontend, worker)
+- ✅ Same Docker image deployed to dev → staging → prod
+- ✅ No environment-specific image rebuilds
+- ✅ Easy to add new services
+
+See [DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md) for detailed deployment instructions.
 
 ## Prerequisites
 
@@ -61,9 +73,27 @@ terraform/
 
 ## Deployment Instructions
 
-### 1. First-Time Setup
+**⚠️ IMPORTANT**: Follow the deployment order in [DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md)
 
-For the initial deployment, you need to create the state bucket:
+### Quick Start
+
+1. **Deploy all environments** (dev, staging, prod) to create service accounts
+2. **Update shared configuration** with service account emails
+3. **Deploy shared registries** with cross-project IAM
+4. **Verify** registry access from all environments
+
+### Detailed Steps
+
+See [DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md) for:
+- Complete deployment order
+- Service account configuration
+- CI/CD image workflow
+- Adding new services
+- Troubleshooting
+
+### First-Time Setup (State Bucket)
+
+Create the Terraform state bucket first:
 
 ```bash
 cd environments/dev
@@ -77,47 +107,6 @@ terraform apply
 ```
 
 After the state bucket is created, set `create_state_bucket = false` in terraform.tfvars.
-
-### 2. Deploy Development Environment
-
-```bash
-cd environments/dev
-
-# Initialize Terraform
-terraform init
-
-# Review planned changes
-terraform plan
-
-# Apply infrastructure
-terraform apply
-
-# Get outputs for Helm configuration
-terraform output -json > outputs.json
-```
-
-### 3. Deploy Staging Environment
-
-```bash
-cd environments/staging
-
-# Update terraform.tfvars with your project ID
-terraform init
-terraform plan
-terraform apply
-```
-
-### 4. Deploy Production Environment
-
-```bash
-cd environments/prod
-
-# Update terraform.tfvars with your project ID
-# Review all settings carefully
-terraform init
-terraform plan
-terraform apply
-```
 
 ## Environment Configurations
 
@@ -160,9 +149,19 @@ The Terraform configurations output values needed for Helm deployments:
 - `cloudsql_connection_name` - For Cloud SQL proxy
 - `cloudsql_private_ip` - Database private IP
 - `valkey_host` - Cache host address
-- `artifact_registry_url` - Docker registry URL
+- `artifact_registry_base_url` - Shared registry base URL
+- `api_repository_url` - API service Docker repository
+- `frontend_repository_url` - Frontend Docker repository
+- `worker_repository_url` - Worker Docker repository
 - `database_password_secret_id` - Secret Manager reference
 - Service account emails for Workload Identity
+
+### Shared Registry URLs
+
+All environments use the same registries (hosted in production project):
+- API: `us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-api`
+- Frontend: `us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-frontend`
+- Worker: `us-west1-docker.pkg.dev/airtrafik-prod/airtrafik-worker`
 
 ## Security Considerations
 
