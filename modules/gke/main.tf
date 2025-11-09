@@ -8,7 +8,6 @@ resource "google_container_cluster" "primary" {
   location = var.region
 
   min_master_version = data.google_container_engine_versions.gke_version.latest_master_version
-  node_version       = data.google_container_engine_versions.gke_version.latest_node_version
 
   network    = var.vpc_name
   subnetwork = var.subnet_name
