@@ -10,14 +10,23 @@ variable "region" {
   default     = "us-west1"
 }
 
-variable "repositories" {
-  description = "Map of repository configurations for different services"
-  type = map(object({
-    description             = string
+variable "services" {
+  description = "List of service names to create artifact repositories for"
+  type        = list(string)
+}
+
+variable "repository_config" {
+  description = "Default configuration for all repositories (can be overridden per service)"
+  type = object({
     untagged_retention_days = optional(number, 14)
     dev_retention_days      = optional(number, 60)
     immutable_tags          = optional(bool, true)
-  }))
+  })
+  default = {
+    untagged_retention_days = 14
+    dev_retention_days      = 60
+    immutable_tags          = true
+  }
 }
 
 variable "gke_service_accounts" {

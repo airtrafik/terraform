@@ -155,16 +155,14 @@ Available services (from `environments/ops/main.tf`):
 
 If you're creating a new service not in the list:
 
-1. Update `environments/ops/main.tf`:
+1. Update `environments/ops/terraform.tfvars`:
    ```hcl
-   repositories = {
-     api = { ... }
-     frontend = { ... }
-     worker = { ... }
-     new-service = {  # ADD THIS
-       description = "New service Docker images"
-     }
-   }
+   services = [
+     "api",
+     "frontend",
+     "worker",
+     "new-service"  # ADD THIS - just one line!
+   ]
    ```
 
 2. Apply changes:
@@ -178,6 +176,8 @@ If you're creating a new service not in the list:
    env:
      SERVICE_NAME: new-service
    ```
+
+The repository will be automatically created with sensible defaults.
 
 ## Image Tagging Strategy
 
