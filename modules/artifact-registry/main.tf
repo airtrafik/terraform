@@ -1,10 +1,22 @@
 data "google_project" "current" {}
 
+# Generate repositories map from simple service list with defaults
+locals {
+  repositories = {
+    for service in var.services : service => {
+      description             = "${title(service)} service Docker images"
+      untagged_retention_days = var.repository_config.untagged_retention_days
+      dev_retention_days      = var.repository_config.dev_retention_days
+      immutable_tags          = var.repository_config.immutable_tags
+    }
+  }
+}
+
 # Create one repository per service (e.g., api, frontend, worker)
 # Repository naming: {project_name}-{service} (no environment suffix)
 # This allows the same image to be promoted through dev -> staging -> prod
 resource "google_artifact_registry_repository" "docker" {
-  for_each = var.repositories
+  for_each = local.repositories
 
   location      = var.region
   repository_id = "${var.project_name}-${each.key}"
@@ -56,7 +68,7 @@ resource "google_artifact_registry_repository" "docker" {
 # This allows any environment to pull from these shared registries
 resource "google_artifact_registry_repository_iam_member" "gke_pull" {
   for_each = {
-    for pair in setproduct(keys(var.repositories), var.gke_service_accounts) :
+    for pair in setproduct(keys(local.repositories), var.gke_service_accounts) :
     "${pair[0]}-${element(split("@", pair[1]), 0)}" => {
       repo = pair[0]
       sa   = pair[1]
@@ -74,7 +86,7 @@ resource "google_artifact_registry_repository_iam_member" "gke_pull" {
 # This allows CI pipelines to push images to the shared registries
 resource "google_artifact_registry_repository_iam_member" "ci_push" {
   for_each = {
-    for pair in setproduct(keys(var.repositories), var.ci_service_accounts) :
+    for pair in setproduct(keys(local.repositories), var.ci_service_accounts) :
     "${pair[0]}-${element(split("@", pair[1]), 0)}" => {
       repo = pair[0]
       sa   = pair[1]

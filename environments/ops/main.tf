@@ -20,6 +20,17 @@ module "artifact_registry" {
   project_name = var.project_name
   region       = var.region
 
+  # List of services to create repositories for
+  # To add a new service, simply add its name to var.services in terraform.tfvars
+  services = var.services
+
+  # Optional: Override default repository configuration
+  # repository_config = {
+  #   untagged_retention_days = 14
+  #   dev_retention_days      = 60
+  #   immutable_tags          = true
+  # }
+
   # Pass service accounts from ALL environments for cross-project IAM
   gke_service_accounts = compact([
     var.dev_gke_service_account,
@@ -32,27 +43,4 @@ module "artifact_registry" {
     var.staging_ci_service_account,
     var.prod_ci_service_account,
   ])
-
-  # Define your application services here
-  # To add a new service, simply add a new entry to this map
-  repositories = {
-    api = {
-      description             = "API service Docker images"
-      untagged_retention_days = 14
-      dev_retention_days      = 60
-      immutable_tags          = true
-    }
-    frontend = {
-      description             = "Frontend application Docker images"
-      untagged_retention_days = 14
-      dev_retention_days      = 60
-      immutable_tags          = true
-    }
-    worker = {
-      description             = "Background worker Docker images"
-      untagged_retention_days = 14
-      dev_retention_days      = 60
-      immutable_tags          = true
-    }
-  }
 }

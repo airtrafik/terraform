@@ -169,24 +169,33 @@ kubectl --context=prod set image deployment/api \
 
 To add a new service (e.g., `scheduler`):
 
-1. Edit `environments/ops/main.tf`
-2. Add to the `repositories` map:
+1. Edit `environments/ops/terraform.tfvars`
+2. Add the service name to the `services` list:
 
 ```hcl
-repositories = {
-  api = { ... }
-  frontend = { ... }
-  worker = { ... }
-  scheduler = {  # NEW SERVICE
-    description             = "Task scheduler Docker images"
-    untagged_retention_days = 14
-    dev_retention_days      = 60
-    immutable_tags          = true
-  }
-}
+services = [
+  "api",
+  "frontend",
+  "worker",
+  "scheduler"  # NEW SERVICE - just one line!
+]
 ```
 
-3. Update outputs in `environments/ops/outputs.tf`:
+3. Apply the changes:
+
+```bash
+cd environments/ops
+terraform plan
+terraform apply
+```
+
+That's it! The new repository will be automatically created with:
+- Repository ID: `airtrafik-scheduler`
+- Description: "Scheduler service Docker images"
+- Default retention policies (14 days untagged, 60 days dev/test)
+- IAM permissions for all environments
+
+**Optional**: Add an output for the new service in `environments/ops/outputs.tf`:
 
 ```hcl
 output "scheduler_repository_url" {
@@ -195,26 +204,7 @@ output "scheduler_repository_url" {
 }
 ```
 
-4. Apply the changes:
-
-```bash
-cd environments/ops
-terraform plan
-terraform apply
-```
-
-5. Reference the new repository in environment outputs:
-
-Update `environments/{dev,staging,prod}/outputs.tf`:
-
-```hcl
-output "scheduler_repository_url" {
-  description = "Scheduler Docker repository URL"
-  value       = try(data.terraform_remote_state.shared.outputs.scheduler_repository_url, "")
-}
-```
-
-That's it! The new repository will automatically have IAM permissions for all environments.
+And reference it in environment outputs if needed.
 
 ## Image Retention & Cleanup Policies
 

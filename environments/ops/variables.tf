@@ -1,5 +1,5 @@
 variable "project_id" {
-  description = "GCP project ID for hosting shared resources (typically prod project)"
+  description = "GCP project ID for hosting shared resources (airtrafik-ops)"
   type        = string
 }
 
@@ -13,6 +13,11 @@ variable "region" {
   description = "GCP region"
   type        = string
   default     = "us-west1"
+}
+
+variable "services" {
+  description = "List of service names to create artifact repositories for"
+  type        = list(string)
 }
 
 # Service account emails from all environments for IAM bindings
