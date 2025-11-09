@@ -241,15 +241,36 @@ gcloud compute project-info describe --project=<project-id>
 3. **Untagged image cleanup**: Configured in Artifact Registry
 4. **Lifecycle policies**: Automatic deletion of old backups/uploads
 
+## CI/CD with GitHub Actions
+
+This infrastructure is designed to work with **GitHub Actions** for building and deploying services.
+
+### Quick Start
+1. Copy workflow templates from `.github/workflows-examples/` to your service repository
+2. Set up authentication (see [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md))
+3. Update `SERVICE_NAME` in the workflow to match your service
+4. Push to trigger the workflow
+
+### Available Workflows
+- **build-and-push.yml** - Build and push Docker images to shared registries
+- **deploy-to-gke.yml** - Deploy to GKE environments
+- **full-cicd.yml** - Complete CI/CD pipeline with testing and deployment
+
+### Authentication Options
+- **Service Account Key** - Simple setup, less secure (good for testing)
+- **Workload Identity Federation** - Recommended for production (no long-lived keys)
+
+See [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md) for complete setup instructions.
+
 ## Next Steps
 
 After infrastructure is deployed:
 
-1. Install Helm charts for applications
-2. Configure ingress controllers
-3. Setup monitoring (Prometheus/Grafana)
-4. Configure CI/CD pipelines
-5. Setup DNS and SSL certificates
+1. **Set up CI/CD**: Configure GitHub Actions (see [GITHUB_ACTIONS.md](./GITHUB_ACTIONS.md))
+2. **Deploy applications**: Install Helm charts or use kubectl
+3. **Configure ingress**: Set up ingress controllers and load balancers
+4. **Setup monitoring**: Install Prometheus/Grafana or use Cloud Monitoring
+5. **Setup DNS and SSL**: Configure domains and certificates
 
 ## Support
 

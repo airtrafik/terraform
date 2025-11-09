@@ -1,0 +1,151 @@
+# Example GitHub Actions workflow for deploying to GKE
+# Copy this file to your service repository at: .github/workflows/deploy-to-gke.yml
+#
+# This workflow:
+# 1. Authenticates to GCP
+# 2. Updates GKE deployment with new image
+# 3. Waits for rollout to complete
+#
+# Triggered after successful image build or manually
+
+name: Deploy to GKE
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      image_tag:
+        description: 'Image tag to deploy (e.g., git SHA or version)'
+        required: true
+        type: string
+
+env:
+  SERVICE_NAME: api  # Change to match your service
+  REGISTRY_REGION: us-west1
+  REGISTRY_PROJECT: airtrafik-prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Only run if workflow_run succeeded or manually triggered
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine deployment parameters
+        id: params
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Manual deployment
+            ENVIRONMENT="${{ inputs.environment }}"
+            IMAGE_TAG="${{ inputs.image_tag }}"
+          else
+            # Auto deployment from main branch
+            ENVIRONMENT="dev"
+            IMAGE_TAG=$(git rev-parse --short HEAD)
+          fi
+
+          # Map environment to GCP project
+          case $ENVIRONMENT in
+            dev)
+              GCP_PROJECT="airtrafik-dev"
+              CLUSTER_NAME="airtrafik-gke-dev"
+              K8S_NAMESPACE="default"
+              ;;
+            staging)
+              GCP_PROJECT="airtrafik-staging"
+              CLUSTER_NAME="airtrafik-gke-staging"
+              K8S_NAMESPACE="default"
+              ;;
+            prod)
+              GCP_PROJECT="airtrafik-prod"
+              CLUSTER_NAME="airtrafik-gke-prod"
+              K8S_NAMESPACE="production"
+              ;;
+          esac
+
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "gcp_project=${GCP_PROJECT}" >> $GITHUB_OUTPUT
+          echo "cluster_name=${CLUSTER_NAME}" >> $GITHUB_OUTPUT
+          echo "k8s_namespace=${K8S_NAMESPACE}" >> $GITHUB_OUTPUT
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          # OR use Workload Identity (uncomment and configure):
+          # workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          # service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          gcloud components install gke-gcloud-auth-plugin
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials \
+            ${{ steps.params.outputs.cluster_name }} \
+            --region=${{ env.REGISTRY_REGION }} \
+            --project=${{ steps.params.outputs.gcp_project }}
+
+      - name: Deploy to GKE
+        run: |
+          IMAGE="${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.REGISTRY_PROJECT }}/airtrafik-${{ env.SERVICE_NAME }}:${{ steps.params.outputs.image_tag }}"
+
+          echo "Deploying image: ${IMAGE}"
+          echo "To namespace: ${{ steps.params.outputs.k8s_namespace }}"
+
+          # Update deployment
+          kubectl set image deployment/${{ env.SERVICE_NAME }} \
+            ${{ env.SERVICE_NAME }}=${IMAGE} \
+            -n ${{ steps.params.outputs.k8s_namespace }}
+
+          # Wait for rollout to complete
+          kubectl rollout status deployment/${{ env.SERVICE_NAME }} \
+            -n ${{ steps.params.outputs.k8s_namespace }} \
+            --timeout=5m
+
+      - name: Verify deployment
+        run: |
+          echo "Current deployment status:"
+          kubectl get deployment ${{ env.SERVICE_NAME }} \
+            -n ${{ steps.params.outputs.k8s_namespace }}
+
+          echo ""
+          echo "Running pods:"
+          kubectl get pods \
+            -n ${{ steps.params.outputs.k8s_namespace }} \
+            -l app=${{ env.SERVICE_NAME }}
+
+      - name: Output deployment summary
+        run: |
+          echo "### Deployment Successful :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service:** ${{ env.SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ steps.params.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image tag:** ${{ steps.params.outputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Cluster:** ${{ steps.params.outputs.cluster_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Namespace:** ${{ steps.params.outputs.k8s_namespace }}" >> $GITHUB_STEP_SUMMARY

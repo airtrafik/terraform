@@ -1,0 +1,254 @@
+# Example full CI/CD workflow
+# Copy this file to your service repository at: .github/workflows/cicd.yml
+#
+# This workflow combines:
+# - Testing
+# - Building and pushing Docker images
+# - Deploying to appropriate environment
+#
+# Workflow:
+# - PR: Run tests only
+# - main branch: Test → Build → Deploy to dev
+# - Tag (v*): Test → Build → Deploy to staging → (manual) Deploy to prod
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+env:
+  SERVICE_NAME: api  # Update for your service
+  REGISTRY_REGION: us-west1
+  REGISTRY_PROJECT: airtrafik-prod
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js  # Adjust for your language
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          # Add test environment variables
+          NODE_ENV: test
+
+  build-and-push:
+    name: Build and Push Image
+    needs: test
+    # Only build on push to main/tags, not on PRs
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.git_sha }}
+      environment: ${{ steps.meta.outputs.environment }}
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY_REGION }}-docker.pkg.dev
+
+      - name: Generate image metadata
+        id: meta
+        run: |
+          REGISTRY="${{ env.REGISTRY_REGION }}-docker.pkg.dev"
+          REPOSITORY="${{ env.REGISTRY_PROJECT }}/airtrafik-${{ env.SERVICE_NAME }}"
+          IMAGE_BASE="${REGISTRY}/${REPOSITORY}"
+
+          GIT_SHA=$(git rev-parse --short HEAD)
+          TAGS="${IMAGE_BASE}:${GIT_SHA}"
+
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAGS="${TAGS},${IMAGE_BASE}:dev-latest"
+            ENVIRONMENT="dev"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            TAGS="${TAGS},${IMAGE_BASE}:${VERSION}"
+            ENVIRONMENT="staging"
+          fi
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "git_sha=${GIT_SHA}" >> $GITHUB_OUTPUT
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        run: |
+          IFS=',' read -ra TAG_ARRAY <<< "${{ steps.meta.outputs.tags }}"
+
+          BUILD_ARGS=""
+          for tag in "${TAG_ARRAY[@]}"; do
+            BUILD_ARGS="${BUILD_ARGS} -t ${tag}"
+          done
+
+          docker build ${BUILD_ARGS} \
+            --build-arg GIT_SHA=${{ steps.meta.outputs.git_sha }} \
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            .
+
+          for tag in "${TAG_ARRAY[@]}"; do
+            docker push "${tag}"
+          done
+
+  deploy-dev:
+    name: Deploy to Development
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: dev
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy to GKE Dev
+        run: |
+          gcloud components install gke-gcloud-auth-plugin
+          gcloud container clusters get-credentials airtrafik-gke-dev \
+            --region=${{ env.REGISTRY_REGION }} \
+            --project=airtrafik-dev
+
+          IMAGE="${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.REGISTRY_PROJECT }}/airtrafik-${{ env.SERVICE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
+
+          kubectl set image deployment/${{ env.SERVICE_NAME }} \
+            ${{ env.SERVICE_NAME }}=${IMAGE} \
+            -n default
+
+          kubectl rollout status deployment/${{ env.SERVICE_NAME }} \
+            -n default \
+            --timeout=5m
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build-and-push
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: staging
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy to GKE Staging
+        run: |
+          gcloud components install gke-gcloud-auth-plugin
+          gcloud container clusters get-credentials airtrafik-gke-staging \
+            --region=${{ env.REGISTRY_REGION }} \
+            --project=airtrafik-staging
+
+          IMAGE="${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.REGISTRY_PROJECT }}/airtrafik-${{ env.SERVICE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
+
+          kubectl set image deployment/${{ env.SERVICE_NAME }} \
+            ${{ env.SERVICE_NAME }}=${IMAGE} \
+            -n default
+
+          kubectl rollout status deployment/${{ env.SERVICE_NAME }} \
+            -n default \
+            --timeout=5m
+
+  deploy-production:
+    name: Deploy to Production
+    needs: [build-and-push, deploy-staging]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: production  # Requires manual approval in GitHub
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy to GKE Production
+        run: |
+          gcloud components install gke-gcloud-auth-plugin
+          gcloud container clusters get-credentials airtrafik-gke-prod \
+            --region=${{ env.REGISTRY_REGION }} \
+            --project=airtrafik-prod
+
+          IMAGE="${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.REGISTRY_PROJECT }}/airtrafik-${{ env.SERVICE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
+
+          kubectl set image deployment/${{ env.SERVICE_NAME }} \
+            ${{ env.SERVICE_NAME }}=${IMAGE} \
+            -n production
+
+          kubectl rollout status deployment/${{ env.SERVICE_NAME }} \
+            -n production \
+            --timeout=10m
+
+      - name: Tag production image
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY_REGION }}-docker.pkg.dev
+
+          SOURCE_IMAGE="${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.REGISTRY_PROJECT }}/airtrafik-${{ env.SERVICE_NAME }}:${{ needs.build-and-push.outputs.image_tag }}"
+          PROD_IMAGE="${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.REGISTRY_PROJECT }}/airtrafik-${{ env.SERVICE_NAME }}:prod"
+
+          docker pull ${SOURCE_IMAGE}
+          docker tag ${SOURCE_IMAGE} ${PROD_IMAGE}
+          docker push ${PROD_IMAGE}

@@ -26,13 +26,11 @@ variable "gke_workload_roles" {
 }
 
 variable "ci_cd_roles" {
-  description = "IAM roles to assign to CI/CD service account"
+  description = "IAM roles to assign to CI/CD service account (for GitHub Actions)"
   type        = list(string)
   default = [
-    "roles/container.developer",
-    "roles/artifactregistry.writer",
-    "roles/cloudbuild.builds.builder",
-    "roles/source.writer"
+    "roles/container.developer",      # Deploy to GKE
+    "roles/artifactregistry.writer"   # Push images to Artifact Registry
   ]
 }
 
