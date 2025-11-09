@@ -67,7 +67,6 @@ resource "google_storage_bucket" "backups" {
   lifecycle_rule {
     condition {
       age           = var.backup_archive_after_days
-      storage_class = var.backup_storage_class
     }
     action {
       type          = "SetStorageClass"

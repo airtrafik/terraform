@@ -20,7 +20,7 @@ resource "google_sql_database_instance" "postgres" {
       start_time                     = var.backup_start_time
       point_in_time_recovery_enabled = var.point_in_time_recovery
       transaction_log_retention_days = var.transaction_log_retention_days
-      
+
       backup_retention_settings {
         retained_backups = var.retained_backups
         retention_unit   = "COUNT"
@@ -31,7 +31,6 @@ resource "google_sql_database_instance" "postgres" {
       ipv4_enabled                                  = false
       private_network                               = var.vpc_id
       enable_private_path_for_google_cloud_services = true
-      require_ssl                                   = var.require_ssl
     }
 
     database_flags {

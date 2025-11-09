@@ -48,7 +48,7 @@ variable "authorized_networks" {
 variable "binary_authorization_mode" {
   description = "Binary authorization mode"
   type        = string
-  default     = "EVALUATION_MODE_UNSPECIFIED"
+  default     = "PROJECT_SINGLETON_POLICY_ENFORCE"
 }
 
 variable "enable_cluster_autoscaling" {
